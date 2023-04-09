@@ -1,4 +1,3 @@
-import random
 
 # страта бота -- построить 4 казармы, производить головорезов и
 # отправлять их по одному на все точки кристаллов пока не будет найден противник
@@ -7,11 +6,12 @@ import random
 
 # бот может слить только VeryHard сложности, шанс победы +- 20%
 
+import random
 import sc2
 from sc2 import Race, Difficulty
 from sc2.position import Point2, Point3
 from sc2.unit import Unit
-from sc2.player import Bot, Computer
+from sc2.player import Computer, Bot
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 
@@ -85,7 +85,7 @@ class OwnBot(sc2.BotAI):
                 self.combinedActions.append(rax.train(UnitTypeId.REAPER))
 
         # разбить рабочих по группам для добычи
-        if iteration % 25 == 0:
+        if iteration % 20 == 0:
             await self.distribute_workers()
 
         # контроль юнита Reaper
@@ -99,7 +99,7 @@ class OwnBot(sc2.BotAI):
                 continue
 
             enemyThreatsClose = self.known_enemy_units.filter(lambda x: x.can_attack_ground).closer_than(15, r)
-            if r.health_percentage < 2 / 5 and enemyThreatsClose.exists:
+            if r.health_percentage < 0.35 and enemyThreatsClose.exists:
                 retreatPoints = self.veryCloseEnemy(r.position, distance=2) | self.veryCloseEnemy(r.position, distance=4)
                 retreatPoints = {x for x in retreatPoints if self.inPathingGrid(x)}
                 if retreatPoints:
