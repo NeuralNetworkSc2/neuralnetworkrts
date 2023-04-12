@@ -8,7 +8,7 @@
 
 import random
 import sc2
-from sc2 import Race, Difficulty
+from sc2.player import Race, Difficulty
 from sc2.position import Point2, Point3
 from sc2.unit import Unit
 from sc2.player import Computer, Bot
