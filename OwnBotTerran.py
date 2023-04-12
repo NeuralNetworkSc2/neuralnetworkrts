@@ -299,9 +299,9 @@ class OwnBot(sc2.BotAI):
 
 
 def main():
-    sc2.run_game(sc2.maps.get("AscensiontoAiurLE"), [
+    sc2.run_game(sc2.maps.get("AbyssalReefLE"), [
         Bot(Race.Terran, OwnBot()),
-        Computer(Race.Zerg, Difficulty.VeryHard)
+        Computer(Race.Zerg, Difficulty.Medium)
     ], realtime=False)
 
 # Список протестированных карт
