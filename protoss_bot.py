@@ -20,6 +20,14 @@ class protoss_bot(sc2.BotAI):
             for th in self.townhalls.idle:
                 self.combinedActions.append(th.train(UnitTypeId.PROBE))
 
+        if self.townhalls.exists:
+            for w in self.workers.idle:
+                th = self.townhalls.closest_to(w)
+                mfs = self.state.mineral_field.closer_than(10, th)
+                if mfs:
+                    mf = mfs.closest_to(w)
+                    self.combinedActions.append(w.gather(mf))
+
         if self.supply_left < 5 and not self.already_pending(UnitTypeId.PYLON):
             nexuses = self.units(UnitTypeId.NEXUS).ready
             if nexuses.exists:
@@ -31,7 +39,8 @@ class protoss_bot(sc2.BotAI):
                     self.combinedActions.append(worker.build(UnitTypeId.PYLON, location))
 
         if self.units.of_type([UnitTypeId.PYLON]).ready.exists and self.units(
-                UnitTypeId.GATEWAY).amount + self.already_pending(UnitTypeId.GATEWAY) < 2 and self.can_afford(
+                UnitTypeId.GATEWAY).amount + self.already_pending(UnitTypeId.GATEWAY) + self.units(
+                UnitTypeId.WARPGATE).amount + self.already_pending(UnitTypeId.WARPGATE) < 3 and self.can_afford(
                 UnitTypeId.GATEWAY):
             ws = self.workers.gathering
             if ws and self.townhalls.exists:
@@ -49,10 +58,10 @@ class protoss_bot(sc2.BotAI):
                         if ws.exists:
                             w = ws.closest_to(vesp)
                             self.combinedActions.append(w.build(UnitTypeId.ASSIMILATOR, vesp))
-        if self.units(UnitTypeId.ZEALOT).amount + self.already_pending(UnitTypeId.ZEALOT) < 10:
-            if self.can_afford(UnitTypeId.ZEALOT) and self.supply_left > 0:
-                for rax in self.units(UnitTypeId.GATEWAY).idle:
-                    self.combinedActions.append(rax.train(UnitTypeId.ZEALOT))
+        #if self.units(UnitTypeId.ZEALOT).amount + self.already_pending(UnitTypeId.ZEALOT) < 5:
+        #    if self.can_afford(UnitTypeId.ZEALOT) and self.supply_left > 0:
+        #        for rax in self.units(UnitTypeId.GATEWAY).idle:
+        #            self.combinedActions.append(rax.train(UnitTypeId.ZEALOT))
 
         if 1 <= self.townhalls.amount < 2 and self.already_pending(UnitTypeId.NEXUS) == 0 and self.can_afford(
                 UnitTypeId.NEXUS):
@@ -80,23 +89,51 @@ class protoss_bot(sc2.BotAI):
             forge = self.units(UnitTypeId.FORGE).first
             if self.can_afford(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1):
                 self.combinedActions.append(forge.research(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1))
-            if self.on_upgrade_complete(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1) and self.can_afford(
+            if await self.on_upgrade_complete(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1) and self.can_afford(
                 UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2):
                 self.combinedActions.append(forge.research(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL2))
             if self.can_afford(UpgradeId.PROTOSSGROUNDARMORSLEVEL1):
                 self.combinedActions.append(forge.research(UpgradeId.PROTOSSGROUNDARMORSLEVEL1))
+
+        if self.units(UnitTypeId.CYBERNETICSCORE).amount > 0:
+            csc = self.units(UnitTypeId.CYBERNETICSCORE).random
+            if self.can_afford(UpgradeId.WARPGATERESEARCH):
+                self.combinedActions.append(csc.research(UpgradeId.WARPGATERESEARCH))
 
         if self.units(UnitTypeId.CYBERNETICSCORE).amount == 0:
             if self.can_afford(UnitTypeId.CYBERNETICSCORE):
                 workers = self.workers.gathering
                 if workers and self.townhalls.exists:
                     solo_worker = workers.furthest_to(workers.center)
-                    loca = await self.find_placement(UnitTypeId.CYBERNETICSCORE, self.townhalls.random.position, placement_step=5)
+                    loca = await self.find_placement(UnitTypeId.CYBERNETICSCORE, self.townhalls.random.position, placement_step=3)
                     if loca:
                         self.combinedActions.append(solo_worker.build(UnitTypeId.CYBERNETICSCORE, loca))
 
+        if self.units(UnitTypeId.CYBERNETICSCORE).amount == 1 and self.units(UnitTypeId.GATEWAY).amount > 0:
+            if self.units(UnitTypeId.ROBOTICSFACILITY).amount == 0 and self.can_afford(UnitTypeId.ROBOTICSFACILITY):
+                workers = self.workers.gathering
+                if self.townhalls.exists and workers:
+                    solo_worker = workers.furthest_to(workers.center)
+                    location = await self.find_placement(UnitTypeId.ROBOTICSFACILITY, self.townhalls.first.position, placement_step=3)
+                    if location:
+                        self.combinedActions.append(solo_worker.build(UnitTypeId.ROBOTICSFACILITY, location))
 
-        #сделать создание юнита сталкер
+        if self.units(UnitTypeId.GATEWAY).amount > 0 and self.units(UnitTypeId.CYBERNETICSCORE).amount > 0:
+            if self.units(UnitTypeId.STALKER).amount + self.already_pending(UnitTypeId.STALKER) < 10 and self.supply_left > 2:
+                if self.can_afford(UnitTypeId.STALKER) and self.supply_left > 0:
+                    for gw in self.units(UnitTypeId.GATEWAY).idle:
+                        self.combinedActions.append(gw.train(UnitTypeId.STALKER))
+
+        if self.units(UnitTypeId.ROBOTICSFACILITY).amount > 0 and self.units(UnitTypeId.ROBOTICSBAY).amount \
+                + self.already_pending(UnitTypeId.ROBOTICSBAY) < 1:
+            workers = self.workers.gathering
+            if workers and self.townhalls.exists:
+                solo_worker = workers.furthest_to(workers.center)
+                loc = await self.find_placement(UnitTypeId.ROBOTICSBAY, self.townhalls.random.position, placement_step=3)
+                if loc:
+                    self.combinedActions.append(solo_worker.build(UnitTypeId.ROBOTICSBAY, loc))
+
+
 
         if iteration % 25 == 0:
             await self.distribute_workers()
@@ -116,7 +153,6 @@ class protoss_bot(sc2.BotAI):
         deficitGeysers = {}
         surplusGeysers = {}
         for g in self.geysers.filter(lambda x: x.vespene_contents > 0):
-            # работа только с теми, что имеют ресы
             deficit = g.ideal_harvesters - g.assigned_harvesters
             if deficit > 0:
                 deficitGeysers[g.tag] = {"unit": g, "deficit": deficit}
