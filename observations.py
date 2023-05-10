@@ -14,6 +14,7 @@ from collections import namedtuple
 import os
 from util import get_names
 
+
 PATH = "/home/gilsson/StarTrain/model/best_saved.tm"
 DATA_DIR = "/home/gilsson/StarTrain/StarTrainSaved/stats_replay/"
 

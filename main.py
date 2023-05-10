@@ -18,6 +18,23 @@ import loader
 import util
 FLAGS = flags.FLAGS
 
+AGENT_INTERFACE_FORMAT = ft.AgentInterfaceFormat(
+    feature_dimensions=ft.Dimensions((64, 64),
+                                     (64, 64)),
+    hide_specific_actions=True,
+    use_feature_units=True,
+    # use_raw_units=True,
+    # use_raw_actions=True,
+    max_raw_actions=512,
+    max_selected_units=30,
+    use_unit_counts=False,
+    use_camera_position=True,
+    show_cloaked=False,
+    show_burrowed_shadows=False,
+    show_placeholders=False,
+    # hide_specific_actions=False,
+    action_delay_fn=None,
+)
 """Initializer.
 
     Args:
@@ -91,30 +108,14 @@ if __name__ == "__main__":
     #     feature_dimensions=sc2_env.Dimensions(screen=64, minimap=64),
     #     use_feature_units=True, use_raw_units=True,  rgb_dimensions=None
     # )
-    AGENT_INTERFACE_FORMAT = ft.AgentInterfaceFormat(
-        feature_dimensions=ft.Dimensions((64, 64),
-                                         (64, 64)),
-        # use_feature_units=True,
-        # use_raw_units=True,
-        # use_raw_actions=True,
-        max_raw_actions=512,
-        max_selected_units=30,
-        use_unit_counts=False,
-        use_camera_position=True,
-        show_cloaked=False,
-        show_burrowed_shadows=False,
-        show_placeholders=False,
-        hide_specific_actions=False,
-        action_delay_fn=None,
-    )
     # run_config = run_configs.get()
     # # with run_config.start() as controller:
     with sc2_env.SC2Env(
             map_name="Acropolis",
             players=[sc2_env.Agent(sc2_env.Race.zerg), sc2_env.Bot(
                 sc2_env.Race.terran, sc2_env.Difficulty.easy)],
-            step_mul=8,
-            visualize=True,
+            realtime=False,
+            visualize=False,
             agent_interface_format=AGENT_INTERFACE_FORMAT) as env:
         net = rl_agent.Model(env.observation_spec()[
                              0]['feature_screen'], 573)
@@ -122,7 +123,7 @@ if __name__ == "__main__":
         # agent = ptan.agent.PolicyAgent(lambda x: net(
         #     x)[0], apply_softmax=True, device=torch.device("cuda"))
         # exp_source = ptan.experience.ExperienceSourceFirstLast(env, agetn)
-        agent = rl_agent.DefaultAgent(net)
+        agent = rl_agent.A3CAgent(net)
         run_loop.run_loop([agent], env, 100000)
         # done = False
         # action = [actions.FunctionCall(actions.FUNCTIONS.no_op.id, [])]
