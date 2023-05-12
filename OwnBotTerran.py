@@ -15,12 +15,14 @@ from sc2.player import Computer, Bot
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 
-
+flag = 0
+upgrade_flag = 0
 class OwnBot(sc2.BotAI):
     def __init__(self):
         self.combinedActions = []
 
     async def on_step(self, iteration):
+        global flag
         self.combinedActions = []
         if self.supply_left < 5 and self.townhalls.exists and self.supply_used >= 14 and self.can_afford(
                 UnitTypeId.SUPPLYDEPOT) and self.units(UnitTypeId.SUPPLYDEPOT).not_ready.amount + self.already_pending(
@@ -88,59 +90,62 @@ class OwnBot(sc2.BotAI):
         if iteration % 20 == 0:
             await self.distribute_workers()
 
+        if self.units(UnitTypeId.REAPER).amount > 4:
+            flag = 1
         # контроль юнита Reaper
-        for reaper in self.units(UnitTypeId.REAPER):
-            #поиск вражеского наземного юнита в радиусе 5 игровых единиц
-            enemyGroundUnits = self.known_enemy_units.not_flying.closer_than(5, reaper)
-            if reaper.weapon_cooldown == 0 and enemyGroundUnits.exists:
-                enemyGroundUnits = enemyGroundUnits.sorted(lambda x: x.distance_to(reaper))
-                closestEnemy = enemyGroundUnits[0]
-                self.combinedActions.append(reaper.attack(closestEnemy))
-                continue
-            # в случае нахождения врага рядом с головорезом и при этом сам головорез лоухп( < 35% ) то он должен отступить на конкретное расстояние
-            enemyThreatsClose = self.known_enemy_units.filter(lambda x: x.can_attack_ground).closer_than(15, reaper)
-            if reaper.health_percentage < 0.35 and enemyThreatsClose.exists:
-                retreatPoints = self.veryCloseEnemy(reaper.position, distance=2) | self.veryCloseEnemy(reaper.position, distance=4)
-                retreatPoints = {x for x in retreatPoints if self.inPathingGrid(x)}
-                if retreatPoints:
-                    closestEnemy = enemyThreatsClose.closest_to(reaper)
-                    retreatPoint = closestEnemy.position.furthest(retreatPoints)
-                    self.combinedActions.append(reaper.move(retreatPoint))
+        if flag == 1:
+            for reaper in self.units(UnitTypeId.REAPER):
+                #поиск вражеского наземного юнита в радиусе 5 игровых единиц
+                enemyGroundUnits = self.known_enemy_units.not_flying.closer_than(5, reaper)
+                if reaper.weapon_cooldown == 0 and enemyGroundUnits.exists:
+                    enemyGroundUnits = enemyGroundUnits.sorted(lambda x: x.distance_to(reaper))
+                    closestEnemy = enemyGroundUnits[0]
+                    self.combinedActions.append(reaper.attack(closestEnemy))
+                    continue
+                # в случае нахождения врага рядом с головорезом и при этом сам головорез лоухп( < 35% ) то он должен отступить на конкретное расстояние
+                enemyThreatsClose = self.known_enemy_units.filter(lambda x: x.can_attack_ground).closer_than(15, reaper)
+                if reaper.health_percentage < 0.35 and enemyThreatsClose.exists:
+                    retreatPoints = self.veryCloseEnemy(reaper.position, distance=2) | self.veryCloseEnemy(reaper.position, distance=4)
+                    retreatPoints = {x for x in retreatPoints if self.inPathingGrid(x)}
+                    if retreatPoints:
+                        closestEnemy = enemyThreatsClose.closest_to(reaper)
+                        retreatPoint = closestEnemy.position.furthest(retreatPoints)
+                        self.combinedActions.append(reaper.move(retreatPoint))
+                        continue
+
+                reaperGrenadeRange = self._game_data.abilities[AbilityId.KD8CHARGE_KD8CHARGE.value]._proto.cast_range
+                enemyGroundUnitsInGrenadeRange = self.known_enemy_units.not_structure.not_flying.exclude_type(
+                    [UnitTypeId.LARVA, UnitTypeId.EGG]).closer_than(reaperGrenadeRange, reaper)
+                if enemyGroundUnitsInGrenadeRange.exists and (reaper.is_attacking or reaper.is_moving):
+                    abilities = (await self.get_available_abilities(reaper))
+                    enemyGroundUnitsInGrenadeRange = enemyGroundUnitsInGrenadeRange.sorted(lambda x: x.distance_to(reaper),
+                                                                                           reverse=True)
+                    furthestEnemy = None
+                    for enemy in enemyGroundUnitsInGrenadeRange:
+                        if await self.can_cast(reaper, AbilityId.KD8CHARGE_KD8CHARGE, enemy, cached_abilities_of_unit=abilities):
+                            furthestEnemy = enemy
+                            break
+                    if furthestEnemy:
+                        self.combinedActions.append(reaper(AbilityId.KD8CHARGE_KD8CHARGE, furthestEnemy))
+                        continue
+
+                enemyThreatsVeryClose = self.known_enemy_units.filter(lambda x: x.can_attack_ground).closer_than(4.5, reaper)
+                if reaper.weapon_cooldown != 0 and enemyThreatsVeryClose.exists:
+                    retreatPoints = self.veryCloseEnemy(reaper.position, distance=2) | self.veryCloseEnemy(reaper.position, distance=4)
+                    retreatPoints = {x for x in retreatPoints if self.inPathingGrid(x)}
+                    if retreatPoints:
+                        closestEnemy = enemyThreatsVeryClose.closest_to(reaper)
+                        retreatPoint = max(retreatPoints, key=lambda x: x.distance_to(closestEnemy) - x.distance_to(reaper))
+                        self.combinedActions.append(reaper.move(retreatPoint))
+                        continue
+                allEnemyGroundUnits = self.known_enemy_units.not_flying
+                if allEnemyGroundUnits.exists:
+                    closestEnemy = allEnemyGroundUnits.closest_to(reaper)
+                    self.combinedActions.append(reaper.move(closestEnemy))
                     continue
 
-            reaperGrenadeRange = self._game_data.abilities[AbilityId.KD8CHARGE_KD8CHARGE.value]._proto.cast_range
-            enemyGroundUnitsInGrenadeRange = self.known_enemy_units.not_structure.not_flying.exclude_type(
-                [UnitTypeId.LARVA, UnitTypeId.EGG]).closer_than(reaperGrenadeRange, reaper)
-            if enemyGroundUnitsInGrenadeRange.exists and (reaper.is_attacking or reaper.is_moving):
-                abilities = (await self.get_available_abilities(reaper))
-                enemyGroundUnitsInGrenadeRange = enemyGroundUnitsInGrenadeRange.sorted(lambda x: x.distance_to(reaper),
-                                                                                       reverse=True)
-                furthestEnemy = None
-                for enemy in enemyGroundUnitsInGrenadeRange:
-                    if await self.can_cast(reaper, AbilityId.KD8CHARGE_KD8CHARGE, enemy, cached_abilities_of_unit=abilities):
-                        furthestEnemy = enemy
-                        break
-                if furthestEnemy:
-                    self.combinedActions.append(reaper(AbilityId.KD8CHARGE_KD8CHARGE, furthestEnemy))
-                    continue
-
-            enemyThreatsVeryClose = self.known_enemy_units.filter(lambda x: x.can_attack_ground).closer_than(4.5, reaper)
-            if reaper.weapon_cooldown != 0 and enemyThreatsVeryClose.exists:
-                retreatPoints = self.veryCloseEnemy(reaper.position, distance=2) | self.veryCloseEnemy(reaper.position, distance=4)
-                retreatPoints = {x for x in retreatPoints if self.inPathingGrid(x)}
-                if retreatPoints:
-                    closestEnemy = enemyThreatsVeryClose.closest_to(reaper)
-                    retreatPoint = max(retreatPoints, key=lambda x: x.distance_to(closestEnemy) - x.distance_to(reaper))
-                    self.combinedActions.append(reaper.move(retreatPoint))
-                    continue
-            allEnemyGroundUnits = self.known_enemy_units.not_flying
-            if allEnemyGroundUnits.exists:
-                closestEnemy = allEnemyGroundUnits.closest_to(reaper)
-                self.combinedActions.append(reaper.move(closestEnemy))
-                continue
-
-            # разведка 1 юнитом в рандом точку для поиска цели
-            self.combinedActions.append(reaper.move(random.choice(self.enemy_start_locations)))
+                # разведка 1 юнитом в рандом точку для поиска цели
+                self.combinedActions.append(reaper.move(random.choice(self.enemy_start_locations)))
 
         for oc in self.units(UnitTypeId.ORBITALCOMMAND).filter(lambda x: x.energy >= 50):
             mfs = self.state.mineral_field.closer_than(10, oc)
@@ -162,33 +167,52 @@ class OwnBot(sc2.BotAI):
 
     #расчет позиций рядом с противником, в случае чего перемещения
 
+    #def getPosition(self):
+
     def veryCloseEnemy(self, position, distance=1):
-        p = position
+        #p = position
         d = distance
+       # print("aboba", position)
         return self.closeEnemy(position, distance) | {
-            Point2((p.x - d, p.y - d)),
-            Point2((p.x - d, p.y + d)),
-            Point2((p.x + d, p.y - d)),
-            Point2((p.x + d, p.y + d)),
+            Point2([position.x - d, position.y - d]),
+            Point2([position.x - d, position.y + d]),
+            Point2([position.x + d, position.y - d]),
+            Point2([position.x + d, position.y + d]),
         }
 
     def closeEnemy(self, position, distance=1):
-        p = position
+       # p = position
         d = distance
         return {
-            Point2((p.x - d, p.y)),
-            Point2((p.x + d, p.y)),
-            Point2((p.x, p.y - d)),
-            Point2((p.x, p.y + d)),
+            Point2((position.x - d, position.y)),
+            Point2((position.x + d, position.y)),
+            Point2((position.x, position.y - d)),
+            Point2((position.x, position.y + d)),
         }
 
     # передвижение наземных юнитов в точку
     def inPathingGrid(self, pos):
-        # проверка на возможность перемещения(нужно пофиксить рядом с клифами и возвышенностями)
         assert isinstance(pos, (Point2, Point3, Unit))
         pos = pos.position.to2.rounded
         return self._game_info.pathing_grid[(pos)] != 0
-
+    async def build_bays(self):
+        if self.units.of_type([UnitTypeId.ENGINEERINGBAY]).amount == 0 \
+            and self.can_afford(UnitTypeId.ENGINEERINGBAY):
+            all_workers = self.workers.gathering
+            if all_workers:
+                some_worker = all_workers.random
+                new_placement = await self.find_placement(UnitTypeId.ENGINEERINGBAY, some_worker.position, placement_step=4)
+                self.combinedActions.append(all_workers.build(UnitTypeId.SUPPLYDEPOT, all_workers))
+    async def  upgrade_buildings(self):
+        global upgrade_flag
+        if self.units(UnitTypeId.ENGINEERINGBAY).amount == 1:
+            if self.can_afford(AbilityId.ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1):
+                townhall = self.townhalls.first
+                townhall.research(AbilityId.ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL2)
+                upgrade_flag = 1
+        if upgrade_flag == 1 and self.units(UnitTypeId.REAPER).amount > 4 and self.units(UnitTypeId).amount == 1:
+            if self.can_afford(AbilityId.ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL2):
+                self.townhalls.random.research(AbilityId.ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL2)
 
     def already_pending(self, unit_type):
         ability = self._game_data.units[unit_type.value].creation_ability
@@ -301,7 +325,7 @@ class OwnBot(sc2.BotAI):
 def main():
     sc2.run_game(sc2.maps.get("AscensiontoAiurLE"), [
         Bot(Race.Terran, OwnBot()),
-        Computer(Race.Zerg, Difficulty.VeryHard)
+        Computer(Race.Zerg, Difficulty.Easy)
     ], realtime=False)
 
 # Список протестированных карт
