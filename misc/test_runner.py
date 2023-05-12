@@ -2,6 +2,7 @@ from neuralnetworkrts.OwnBotTerran import OwnBot
 import sys
 import os
 import openpyxl as opxl
+import time
 import xlrd, xlwt
 import sc2
 from sc2 import Race, Difficulty
@@ -34,8 +35,9 @@ def main():
     for i in range(current_sheet_test.nrows):
         sRace = 0
         sDifficulty = 0
-        map = current_sheet_test.cell_value(rowx=i,colx=0)
-        map = map.strip('.SC2Map')
+        map = str(current_sheet_test.cell_value(rowx=i,colx=0))
+        list = map.split('.SC2Map')
+        map = list[0]
         difficulty = current_sheet_test.cell_value(rowx=i,colx=1)
         race = current_sheet_test.cell_value(rowx=i,colx=2)
         print(map, difficulty, race)
@@ -47,12 +49,19 @@ def main():
             sRace = Race.Zerg
         elif race == 'Terran':
             sRace = Race.Terran
+        print(map)
+        game_starts = time.time()
         result = sc2.run_game(sc2.maps.get(map), [
              Bot(Race.Terran, OwnBot()),
              Computer(sRace, sDifficulties[difficulty_index])
          ], realtime=False)
+        game_ends = time.time() - game_starts
+        print(game_ends, "aaaaaaaaaaa")
         first_sheet.write(i, 0, f"Test {i}")
         first_sheet.write(i, 1, str(result))
+        first_sheet.write(i, 2, int(game_ends))
+        result_book.save("result_of_tests.xls")
+    first_sheet.write(current_sheet_test.nrows, 2, "Play-time / 5")
     result_book.save("result_of_tests.xls")
 if __name__ == '__main__':
     main()

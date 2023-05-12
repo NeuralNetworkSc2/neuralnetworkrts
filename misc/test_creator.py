@@ -51,10 +51,10 @@ for i in range(num_of_tests):
     race = random.choice(races)
     main_sheet.write(i, 0, map)
     main_sheet.write(i, 1, difficulty)
-    main_sheet.write(i, 2, race)
+    main_sheet.write(i, 2, "Zerg")
 book.save("tests_set.xls")
 
 test_workbook = xlrd.open_workbook_xls("tests_set.xls")
 current_sheet_test = test_workbook["Sheet1"]
-c = current_sheet_test.cell(2, 0)
+c = current_sheet_test.cell(0, 0)
 print(c)
