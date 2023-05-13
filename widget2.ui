@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>widget2</class>
+ <widget class="QWidget" name="widget2">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>534</width>
+    <height>449</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <widget class="QPushButton" name="ToFirstButton">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>385</y>
+     <width>41</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QPushButton#ToFirstButton {
+	color: white;
+	font-size: 30px;
+	border-radius: 15px;
+	font:bold
+}
+QPushButton#ToFirstButton:hover {
+	 color: red; 
+	font-size: 35px;
+}</string>
+   </property>
+   <property name="text">
+    <string>&lt;</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="ToThirdButton">
+   <property name="geometry">
+    <rect>
+     <x>460</x>
+     <y>385</y>
+     <width>41</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QPushButton#ToThirdButton {
+	color: white;
+	font-size: 30px;
+	border-radius: 15px;
+	font:bold
+}
+QPushButton#ToThirdButton:hover {
+	 color: red; 
+	font-size: 35px;
+}</string>
+   </property>
+   <property name="text">
+    <string>&gt;</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="ChoseDirectoryGame">
+   <property name="geometry">
+    <rect>
+     <x>390</x>
+     <y>189</y>
+     <width>111</width>
+     <height>29</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QPushButton#ChoseDirectoryGame{
+	border-radius: 10px;
+	border: 2px solid white;
+	font: bold;
+	color: white;
+}
+
+QPushButton#ChoseDirectoryGame:hover{
+	border-radius: 13px;
+	border: 3px solid red;
+	font: bold;
+	color: red;
+}</string>
+   </property>
+   <property name="text">
+    <string>Выбрать&gt;&gt;</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="ChoseDirectoryMaps">
+   <property name="geometry">
+    <rect>
+     <x>390</x>
+     <y>280</y>
+     <width>111</width>
+     <height>29</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QPushButton#ChoseDirectoryMaps{
+	border-radius: 10px;
+	border: 2px solid white;
+	font: bold;
+	color: white;
+}
+
+QPushButton#ChoseDirectoryMaps:hover{
+	border-radius: 13px;
+	border: 3px solid red;
+	font: bold;
+	color: red;
+}</string>
+   </property>
+   <property name="text">
+    <string>Выбрать&gt;&gt;</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="lineEdit">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>102</x>
+     <y>190</y>
+     <width>281</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">color: white;
+font: bold;
+background-color: transparent;
+border-radius: 10px;
+border: 2px solid gray;</string>
+   </property>
+   <property name="dragEnabled">
+    <bool>false</bool>
+   </property>
+   <property name="readOnly">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>-20</x>
+     <y>-1</y>
+     <width>561</width>
+     <height>461</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string/>
+   </property>
+   <property name="pixmap">
+    <pixmap resource="Fon.qrc">:/image/image/FON.jpg</pixmap>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pushButton_3">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>390</y>
+     <width>41</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">border-radius: 20px;
+border: 2px solid white;</string>
+   </property>
+   <property name="text">
+    <string/>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pushButton_4">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>460</x>
+     <y>390</y>
+     <width>41</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QPushButton#pushButton_4 {
+	border-radius: 20px;
+	border: 2px solid white;
+}
+QPushButton#pushButton4:hover {
+	color: red;
+}</string>
+   </property>
+   <property name="text">
+    <string/>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="lineEdit_2">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>100</x>
+     <y>280</y>
+     <width>281</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">color: white;
+font: bold;
+background-color: transparent;
+border-radius: 10px;
+border: 2px solid gray;</string>
+   </property>
+   <property name="dragEnabled">
+    <bool>false</bool>
+   </property>
+   <property name="readOnly">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>180</x>
+     <y>0</y>
+     <width>221</width>
+     <height>81</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font-size: 60px;
+color: white;
+font: bold;</string>
+   </property>
+   <property name="text">
+    <string>Шаг 1</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_5">
+   <property name="geometry">
+    <rect>
+     <x>100</x>
+     <y>120</y>
+     <width>301</width>
+     <height>81</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font-size: 25px;
+color: white;
+font: bold;</string>
+   </property>
+   <property name="text">
+    <string>Выберите папку с игрой</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_6">
+   <property name="geometry">
+    <rect>
+     <x>100</x>
+     <y>210</y>
+     <width>331</width>
+     <height>81</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font-size: 25px;
+color: white;
+font: bold;</string>
+   </property>
+   <property name="text">
+    <string>Выберите папку с картами</string>
+   </property>
+  </widget>
+  <zorder>label_2</zorder>
+  <zorder>ChoseDirectoryGame</zorder>
+  <zorder>ChoseDirectoryMaps</zorder>
+  <zorder>lineEdit</zorder>
+  <zorder>pushButton_3</zorder>
+  <zorder>ToFirstButton</zorder>
+  <zorder>pushButton_4</zorder>
+  <zorder>ToThirdButton</zorder>
+  <zorder>lineEdit_2</zorder>
+  <zorder>label</zorder>
+  <zorder>label_5</zorder>
+  <zorder>label_6</zorder>
+ </widget>
+ <resources>
+  <include location="Fon.qrc"/>
+ </resources>
+ <connections/>
+</ui>

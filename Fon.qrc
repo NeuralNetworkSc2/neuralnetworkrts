@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>FON.jpg</file>
+    </qresource>
+    <qresource prefix="/image">
+        <file>image/FON.jpg</file>
+    </qresource>
+    <qresource prefix="/src">
+        <file>src/ProtossBot.py</file>
+    </qresource>
+</RCC>

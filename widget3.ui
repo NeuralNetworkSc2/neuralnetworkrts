@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>widget3</class>
+ <widget class="QWidget" name="widget3">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>708</width>
+    <height>454</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>260</x>
+     <y>40</y>
+     <width>121</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Main Settings</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="ToSecondButton">
+   <property name="geometry">
+    <rect>
+     <x>50</x>
+     <y>390</y>
+     <width>31</width>
+     <height>29</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QPushButton#ToSecondButton {
+	color: white;
+	font-size: 30px;
+	border-radius: 15px;
+	font:bold
+}
+QPushButton#ToSecondButton:hover {
+	 color: red; 
+	font-size: 35px;
+}</string>
+   </property>
+   <property name="text">
+    <string>&lt;</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="BotRace">
+   <property name="geometry">
+    <rect>
+     <x>220</x>
+     <y>100</y>
+     <width>82</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">background-color: red;</string>
+   </property>
+   <item>
+    <property name="text">
+     <string>Zerg</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Protoss</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Terran</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Random</string>
+    </property>
+   </item>
+  </widget>
+  <widget class="QComboBox" name="BotDifficulty">
+   <property name="geometry">
+    <rect>
+     <x>220</x>
+     <y>180</y>
+     <width>101</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <item>
+    <property name="text">
+     <string>VeryEasy</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Easy</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Medium</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>MediumHard</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Hard</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Harder</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>VeryHard</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Random</string>
+    </property>
+   </item>
+  </widget>
+  <widget class="QComboBox" name="MapBox">
+   <property name="geometry">
+    <rect>
+     <x>220</x>
+     <y>220</y>
+     <width>131</width>
+     <height>28</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>-10</x>
+     <y>-10</y>
+     <width>821</width>
+     <height>551</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string/>
+   </property>
+   <property name="pixmap">
+    <pixmap resource="Fon.qrc">:/image/image/FON.jpg</pixmap>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pushButton_4">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>47</x>
+     <y>389</y>
+     <width>41</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QPushButton#pushButton_4 {
+	border-radius: 20px;
+	border: 2px solid white;
+}
+QPushButton#pushButton4:hover {
+	color: red;
+}</string>
+   </property>
+   <property name="text">
+    <string/>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="StartButton">
+   <property name="geometry">
+    <rect>
+     <x>270</x>
+     <y>370</y>
+     <width>191</width>
+     <height>61</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">QPushButton#StartButton{
+	border-radius: 10px;
+	border: 2px solid white;
+	font: bold;
+	color: white;
+}
+
+QPushButton#StartButton:hover{
+	border-radius: 13px;
+	border: 3px solid red;
+	font: bold;
+	color: red;
+}</string>
+   </property>
+   <property name="text">
+    <string>НАЧАТь!</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="MyRace">
+   <property name="geometry">
+    <rect>
+     <x>220</x>
+     <y>140</y>
+     <width>82</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <item>
+    <property name="text">
+     <string>Zerg</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Terran</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Protoss</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Random</string>
+    </property>
+   </item>
+  </widget>
+  <widget class="QLabel" name="label_3">
+   <property name="geometry">
+    <rect>
+     <x>270</x>
+     <y>0</y>
+     <width>221</width>
+     <height>81</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font-size: 60px;
+color: white;
+font: bold;</string>
+   </property>
+   <property name="text">
+    <string>Шаг 2</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_5">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>90</y>
+     <width>211</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font-size: 20px;
+color: white;
+font: bold;</string>
+   </property>
+   <property name="text">
+    <string>Выберите расу боту</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_6">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>130</y>
+     <width>211</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font-size: 20px;
+color: white;
+font: bold;</string>
+   </property>
+   <property name="text">
+    <string>Выберите расу себе</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_7">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>170</y>
+     <width>211</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font-size: 20px;
+color: white;
+font: bold;</string>
+   </property>
+   <property name="text">
+    <string>Выберите сложность бота</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_8">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>210</y>
+     <width>211</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font-size: 20px;
+color: white;
+font: bold;</string>
+   </property>
+   <property name="text">
+    <string>Выберите карту</string>
+   </property>
+  </widget>
+  <zorder>label_2</zorder>
+  <zorder>label</zorder>
+  <zorder>BotRace</zorder>
+  <zorder>BotDifficulty</zorder>
+  <zorder>MapBox</zorder>
+  <zorder>pushButton_4</zorder>
+  <zorder>StartButton</zorder>
+  <zorder>ToSecondButton</zorder>
+  <zorder>MyRace</zorder>
+  <zorder>label_3</zorder>
+  <zorder>label_5</zorder>
+  <zorder>label_6</zorder>
+  <zorder>label_7</zorder>
+  <zorder>label_8</zorder>
+ </widget>
+ <resources>
+  <include location="Fon.qrc"/>
+ </resources>
+ <connections/>
+</ui>
