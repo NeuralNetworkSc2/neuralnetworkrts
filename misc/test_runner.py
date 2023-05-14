@@ -34,7 +34,6 @@ first_sheet = result_book.add_sheet("Results")
 def main():
     for i in range(current_sheet_test.nrows):
         sRace = 0
-        sDifficulty = 0
         map = str(current_sheet_test.cell_value(rowx=i,colx=0))
         list = map.split('.SC2Map')
         map = list[0]
@@ -56,7 +55,6 @@ def main():
              Computer(sRace, sDifficulties[difficulty_index])
          ], realtime=False)
         game_ends = time.time() - game_starts
-        print(game_ends, "aaaaaaaaaaa")
         first_sheet.write(i, 0, f"Test {i}")
         first_sheet.write(i, 1, str(result))
         first_sheet.write(i, 2, int(game_ends))
