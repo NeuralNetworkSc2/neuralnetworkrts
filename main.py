@@ -7,7 +7,7 @@ import pysc2.lib.actions as ac
 import pysc2.lib.features as ft
 import sys
 from absl import flags
-from pysc2.env.environment import TimeStep
+from pysc2.env.environment import StepType, TimeStep
 from pysc2.lib.features import Dimensions
 import rl_agent
 import ptan
@@ -103,47 +103,50 @@ AGENT_INTERFACE_FORMAT = ft.AgentInterfaceFormat(
     """
 if __name__ == "__main__":
     FLAGS(sys.argv)
-
+    import sys
+    FLAGS(sys.argv)
     # AGENT_INTERFACE_FORMAT = sc2_env.AgentInterfaceFormat(
     #     feature_dimensions=sc2_env.Dimensions(screen=64, minimap=64),
     #     use_feature_units=True, use_raw_units=True,  rgb_dimensions=None
     # )
     # run_config = run_configs.get()
     # # with run_config.start() as controller:
-    with sc2_env.SC2Env(
-            map_name="Acropolis",
-            players=[sc2_env.Agent(sc2_env.Race.zerg), sc2_env.Bot(
-                sc2_env.Race.terran, sc2_env.Difficulty.easy)],
-            realtime=False,
-            visualize=False,
-            agent_interface_format=AGENT_INTERFACE_FORMAT) as env:
-        net = rl_agent.Model(env.observation_spec()[
-                             0]['feature_screen'], 573)
+    # with sc2_env.SC2Env(
+    #         map_name="Acropolis",
+    #         players=[sc2_env.Agent(sc2_env.Race.zerg), sc2_env.Bot(
+    #             sc2_env.Race.terran, sc2_env.Difficulty.easy)],
+    #         realtime=False,
+    #         agent_interface_format=AGENT_INTERFACE_FORMAT) as env:
+    # net = rl_agent.Model(env.observation_spec()[
+    #     0]['feature_screen'], 573)
+    net = rl_agent.Model()
+    # print(env.observation_spec()[0]['feature_screen'])
 
-        # agent = ptan.agent.PolicyAgent(lambda x: net(
-        #     x)[0], apply_softmax=True, device=torch.device("cuda"))
-        # exp_source = ptan.experience.ExperienceSourceFirstLast(env, agetn)
-        agent = rl_agent.A3CAgent(net)
-        run_loop.run_loop([agent], env, 100000)
-        # done = False
-        # action = [actions.FunctionCall(actions.FUNCTIONS.no_op.id, [])]
-        # obs = env.step(action)
-        # while not done:
-        #     print("observation::::::::::::::::::::::::::::::")
-        #     print(obs[0].observation.feature_screen.player_relative)
-        #     # print("observation_spec>>")
-        #     # print(env.observation_spec())
-        #     # print('---------------------------------------------')
-        #     # print("action_spec>>")
-        #     # print(env.action_spec())
-        #     # print(random.choice(env.action_spec()[0][0]))
-        #     action = np.random.choice(obs[0].observation.available_actions)
-        #     args = [[np.random.randint(0, size) for size in arg.sizes]
-        #             for arg in env.action_spec()[0][1][action].args]
-        #     # print("args>>")
-        #     obs = env.step(
-        #         actions=[actions.FunctionCall(action, args)])
-        #     # if timesteps[0].last():
-        #     #     done = True
-        #     print('---------------------------------------------')
-        #     # nn = rl_agent.ActorCriticModel([64, 64], len(env.action_spec()))
+    # agent = ptan.agent.PolicyAgent(lambda x: net(
+    #     x)[0], apply_softmax=True, device=torch.device("cuda"))
+    # exp_source = ptan.experience.ExperienceSourceFirstLast(env, agetn)
+    agent = rl_agent.A3CAgent(net)
+    # run_loop.run_loop([agent], env, 100000)
+    done = False
+    # action = [actions.FunctionCall(actions.FUNCTIONS.no_op.id, [])]
+    # obs = env.step(action)
+    while not done:
+        agent.step(TimeStep(StepType.FIRST, 1.0, 0.0, ()))
+    #     print("observation::::::::::::::::::::::::::::::")
+    #     print(obs[0].observation.feature_screen.player_relative)
+    #     # print("observation_spec>>")
+    #     # print(env.observation_spec())
+    #     # print('---------------------------------------------')
+    #     # print("action_spec>>")
+    #     # print(env.action_spec())
+    #     # print(random.choice(env.action_spec()[0][0]))
+    #     action = np.random.choice(obs[0].observation.available_actions)
+    #     args = [[np.random.randint(0, size) for size in arg.sizes]
+    #             for arg in env.action_spec()[0][1][action].args]
+    #     # print("args>>")
+    #     obs = env.step(
+    #         actions=[actions.FunctionCall(action, args)])
+    #     # if timesteps[0].last():
+    #     #     done = True
+    #     print('---------------------------------------------')
+    #     # nn = rl_agent.ActorCriticModel([64, 64], len(env.action_spec()))

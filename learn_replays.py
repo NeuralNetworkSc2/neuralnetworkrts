@@ -1,7 +1,14 @@
-from pickle import load
+from pickle import load, loads
+from zstd import decompress
+import numpy as np
+
 
 if __name__ == "__main__":
-    with open(r"/home/gilsson/StarTrain/StarTrainSaved/stats_replay/stats.pkl", "rb") as file:
-        replay = load(file)
+    batch = []
+    with open(r"/home/gilsson/replay_save/1", "rb") as file:
+        batch.append(loads(decompress(load(file))))
 
-    print(replay["actions"])
+    # print(replay)
+
+    inputs, targets, masks, hidden = zip(*batch)
+    print(inputs, targets, masks, hidden)
