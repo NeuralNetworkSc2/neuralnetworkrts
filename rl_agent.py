@@ -1,14 +1,11 @@
-import random
-from pysc2 import lib
-from pysc2.lib.colors import categorical
 import torch
+import gc
 import torch.nn as nn
-import torch.nn.utils as nn_utils
-import torch.nn.functional as F
 import torch.optim as optim
-from torch import FloatTensor, cummax, float64, nn
+from torch.cuda.amp.autocast_mode import autocast
+from torch.cuda.amp.grad_scaler import GradScaler
+from torch import nn
 from pysc2.env.environment import StepType, TimeStep
-import pysc2
 from pysc2.agents import base_agent
 from pysc2.lib import actions, features, static_data
 import numpy as np
@@ -27,6 +24,26 @@ NUM_ENVS = 50
 
 REWARD_STEPS = 4
 CLIP_GRAD = 0.1
+
+
+def compute_sl_loss(prediction, target, masks):
+
+    losses_dict = {}
+    scores_dict = {}
+    loss = 0
+    loss_op = nn.CrossEntropyLoss()
+    for t in target:
+        s1 = prediction[t].shape
+        target[t] = target[t].long()
+        loss_value = loss_op(prediction[t].view((-1, ) + (s1[-1], )),
+                             target[t].view((-1, )))
+        loss_value = masks[t].view((-1, )) * loss_value
+
+        losses_dict[str(t)] = loss_value.sum()
+        scores_dict[str(t)] = masks[t].sum()
+        loss += loss_value.sum().cuda()
+
+    return loss.sum(), losses_dict, scores_dict
 
 
 def weighted_score(score, reward):
@@ -81,7 +98,7 @@ class Core(nn.Module):
         self.lstm = nn.LSTM(128, 128, 1)
 
     def forward(self, screen, map, state):
-        device = torch.device("cpu")
+        device = torch.device("cuda")
         shape = screen.shape
         screen = screen.transpose(2, 4).reshape(
             shape[0] * shape[1], -1, shape[2]).to(device)
@@ -95,7 +112,7 @@ class Core(nn.Module):
         input = input.transpose(0, 1).to(device)
         new_state = []
         for items in state:
-            items = items.to("cpu")
+            items = items.to(device)
             new_state.append(items)
 
         lstm_in = input.reshape(
@@ -171,6 +188,19 @@ class ResidualDenseBlock(nn.Module):
         return x + old_x
 
 
+class DiscreteOutput(nn.Module):
+    def __init__(self, count, addition=0):
+        super(DiscreteOutput, self).__init__()
+        self.l1 = nn.Sequential(
+            nn.Linear(128 + addition, 128), nn.ELU())
+        self.l2 = nn.Linear(128, count)
+
+    def forward(self, x):
+        x = self.l1(x)
+        x = self.l2(x)
+        return x
+
+
 class ActionOut(nn.Module):
     def __init__(self, input_size, count, gating_size) -> None:
         super(ActionOut, self).__init__()
@@ -182,7 +212,7 @@ class ActionOut(nn.Module):
             self.layers.append(ResidualDenseBlock(256))
             self.add_module(f"layer {i}", self.layers[i])
 
-        self.out = GLU(256, gating_size, count)
+        self.out = GLU(256, 256, count)
 
     def forward(self, x, gating):
         x = self.inp(x)
@@ -203,14 +233,15 @@ class ControlGroupsInput(nn.Module):
             nn.Linear(self.layer_size * 10, 64), nn.ReLU())
 
     def forward(self, x, hint, norm=True):
-        x = torch.tensor(x)
-        embedded = self.unit_embedder(torch.tensor(x[:, :, :, 0]).long())
+        embedded = self.unit_embedder(
+            x[:, :, :, 0].long())
         embedded_hint = self.unit_embedder(
-            torch.tensor(hint[:, :, :, 0]).long())
+            hint[:, :, :, 0].long())
         embedded_hint = embedded_hint.repeat(
             embedded.shape[0] // embedded_hint.shape[0], 1, 1, 1)
         x = torch.cat([embedded, x[:, :, :, 1:].float(), embedded_hint],
                       dim=-1)
+
         bypass = x
         s = x.shape
         x = self.layer(x.view(s[:2] + (10 * self.layer_size, )))
@@ -223,11 +254,11 @@ class ControlGrOut(nn.Module):
     def __init__(self) -> None:
         super(ControlGrOut, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Linear(1024, 256), nn.ELU())
-        self.layer2 = nn.Linear(256, 14)
+            nn.Linear(128, 128), nn.ELU())
+        self.layer2 = nn.Linear(128, 14)
         self.encoder = nn.Linear(21, 10)
         self.position_encoder = nn.Parameter(torch.randn(1, 1, 10, 4))
-        self.action = nn.Linear(21 + 256, 5)
+        self.action = nn.Linear(149, 5)
 
     def forward(self, inp, control_groups):
         inp = self.layer1(inp)
@@ -238,6 +269,9 @@ class ControlGrOut(nn.Module):
         attention = values @ select.unsqueeze(-1)
         selected = nn.functional.softmax(
             attention, dim=-2).detach() * control_groups
+
+        selected = selected.sum(-2)
+        attention = attention.view(attention.shape[:-1])
         act_in = torch.cat([inp, selected], dim=-1)
         return attention, self.action(act_in)
 
@@ -286,21 +320,23 @@ class CategoryEmbedder(nn.Module):
         self.relu = nn.ELU()
 
     def forward(self, inputs):
-        float_inputs = inputs.float()
+        inputs = inputs.cpu()
+        float_inputs = inputs.float().cpu()
         unbound = inputs.unbind(
             dim=1)
+        unbound = [b.cpu() for b in unbound]
         f_unbound = float_inputs.unbind(dim=1)
         result = []
         two_value = []
         for u, f, em in zip(unbound, f_unbound, self.category_embeddings):
             if em is None:
-                two_value.append(f.unsqueeze(1))
+                two_value.append(f.unsqueeze(1).cuda())
             else:
                 result.append(
-                    em(u.long()).permute(0, 3, 1, 2).unsqueeze(0)
+                    em(u.long().cuda()).permute(0, 3, 1, 2).unsqueeze(0)
                 )
 
-        reduced = torch.cat(result, dim=0).sum(dim=0)
+        reduced = torch.cat(result, dim=0).sum(dim=0).cuda()
         extended = torch.cat([reduced] + two_value, dim=1)
 
         return extended
@@ -332,11 +368,11 @@ class ScreenInput(nn.Module):
             nn.Conv2d(128, 128, (4, 4), stride=2, padding=1), nn.ELU())
 
         filters = 128
-        for i in range(2):
+        for i in range(4):
             self.input_column.append(
-                ResidualFiLMBlock(filters, 8, 512))
+                ResidualFiLMBlock(filters, 8, 256))
 
-        self.layer_norm_out = nn.LayerNorm((128, 8, 8))
+        self.layer_norm_out = nn.LayerNorm((32, 8, 8))
 
         for i, mod in enumerate(self.input_column):
             self.add_module(f"layer {i}", mod)
@@ -344,10 +380,11 @@ class ScreenInput(nn.Module):
     def forward(self, scalar, categorical, gating):
         shape = scalar.shape
         shape2 = categorical.shape
-        scalar = scalar / self.scales.cpu()
+        scalar = scalar / self.scales.cuda()
         scalar = scalar.view((shape[0] * shape[1], ) + shape[2:])
         bypass = []
-        categorical = categorical.view((shape2[0] * shape2[1], ) + shape2[2:])
+        categorical = categorical.view(
+            (shape2[0] * shape2[1], ) + shape2[2:]).cuda()
         categorical = self.cat_embedder(categorical)
 
         x = torch.cat([scalar, categorical], dim=1)
@@ -358,15 +395,14 @@ class ScreenInput(nn.Module):
         x = self.reduce2(x)
         bypass.append(x)
         x = self.reduce3(x)
-        gating = gating.view(-1, 512)
+        gating = gating.view(-1, 256)
         for layer in self.input_column:
             x = layer(x, gating)
 
         return x.view(shape[:2] + (128, 8, 8)), bypass
 
 
-Feature = collections.namedtuple("Feature", ["id", "shape"
-                                             ])
+Feature = collections.namedtuple("Feature", ["id", "shape"])
 
 
 def get_categorical_scalar(feature):
@@ -391,7 +427,6 @@ minimap_categorical, minimap_scalar = get_categorical_scalar(
 def get_features_by_type(input, feat_list, normalize=False):
     output = []
     for feat in feat_list:
-        # print(feat)
         if normalize:
             norm = feat.shape
         else:
@@ -429,14 +464,14 @@ class ScreenOutput(nn.Module):
         self.output_column = []
         self.deconv_layers = []
 
-        self.reencode = nn.Conv2d(128 + 16, 128, kernel_size=(1, 1))
+        self.reencode = nn.Conv2d(130, 64, kernel_size=(1, 1))
 
-        for i in range(3):
-            self.output_column.append(ResidualFiLMBlock(128, 8, 1024))
+        for i in range(4):
+            self.output_column.append(ResidualFiLMBlock(64, 8, 128))
             self.add_module(f"layer {i}", self.output_column[i])
 
         self.deconv_layer1 = nn.Sequential(
-            nn.ConvTranspose2d(128,
+            nn.ConvTranspose2d(64,
                                128,
                                kernel_size=(4, 4),
                                stride=2,
@@ -459,13 +494,12 @@ class ScreenOutput(nn.Module):
     def forward(self, spatial_in, lstm_in):
         spatial_in, bypass = spatial_in
         shape = spatial_in.shape
-        lstm_in_shredded = lstm_in.view((-1, 16, 8, 8))
+        lstm_in_shredded = lstm_in.view((-1, 2, 8, 8))
 
         spatial_in = spatial_in.view((shape[0] * shape[1], ) + shape[2:])
 
         shape2 = lstm_in.shape
         lstm_in = lstm_in.view((shape2[0] * shape2[1], ) + shape2[2:])
-        print(spatial_in.shape, lstm_in_shredded.shape)
         x = torch.cat((spatial_in, lstm_in_shredded), dim=1)
         x = self.reencode(x)
 
@@ -583,10 +617,11 @@ def get_observation(obs):
 
 
 class Model(nn.Module):
-    def __init__(self):
+    def __init__(self, training=True):
         super(Model, self).__init__()
-        self.lstm = nn.LSTM(512 * 3, 1024, 2)
-        self.lstm_reshape_gating = GLU(2048, 64 * 4, 1024)
+        self.training = training
+        self.lstm = nn.LSTM(1280, 128, 1)
+        self.lstm_reshape_gating = GLU(1408, 256, 128)
         self.core = Core()
         categorical = []
         scalar = []
@@ -640,7 +675,7 @@ class Model(nn.Module):
 
             self.add_module(name + " column", self.input_columns[name])
 
-        self.scalar_reshape = nn.Linear(scalar_input_size, 512)
+        self.scalar_reshape = nn.Linear(scalar_input_size, 256)
         scalar, categorical = in_type["screen"]
         self.screen_in = ScreenInput(scalar, categorical)
         scalar, categorical = in_type["minimap"]
@@ -648,31 +683,47 @@ class Model(nn.Module):
         self.embedding = {}
         self.output_column = {}
         self.output_column["function"] = ActionOut(
-            inputs_size=2560, count=len(actions.FUNCTIONS), gating_size=256)
-        self.embedding["function"] = nn.Embedding(len(actions.FUNCTIONS), 1024)
+            input_size=1408, count=len(actions.FUNCTIONS), gating_size=37)
+        self.embedding["function"] = nn.Embedding(len(actions.FUNCTIONS), 128)
+        self.embedding["time_skip"] = nn.Embedding(20, 128)
+        self.output_column["time_skip"] = DiscreteOutput(20)
+        for out in self.output_column:
+            self.add_module(out + " column", self.output_column[out])
+            self.add_module(out + " embedding", self.embedding[out])
         self.control_groups_out = ControlGrOut()
+
         for x in actions.TYPES:
             u = str(x)
-            if "queued" in u:
-                self.embedding[u] = nn.Embedding(x.sizes[0], 1024)
+            if u == str(actions.TYPES.queued):
+                self.embedding[u] = nn.Embedding(x.sizes[0], 128)
+                with torch.no_grad():
+                    self.embedding[u].weight *= 1 / 128
                 self.add_module(u + " embedding", self.embedding[u])
 
             if "screen" in u or "minimap" in u:
                 self.output_column[u] = ScreenOutput()
-                self.add_module(u + " out", self.output_column[u])
-        self.add_module("function embedding", self.output_column["function"])
-        self.add_module("control_groups embedding", self.control_groups_out)
+            elif "control_group_id" in u:
+                self.control_group_id_name = u
+                u = "control_group"
+                self.output_column["control_group"] = ControlGrOut()
+            elif "control_group_act" in u:
+                self.control_group_act_name = u
+                continue
+            else:
+                self.output_column[u] = DiscreteOutput(x.sizes[0])
 
-    def forward(self, inputs, hidden, targets):
+            self.add_module(u + " column", self.output_column[u])
+
+    def forward(self, inputs, hidden, targets=None):
         sample = next(iter(inputs.values()))
-        gating_input = torch.zeros(sample.shape[:2] + (0, ))
-        scalar_input = torch.zeros(sample.shape[:2] + (0, ))
+        gating_input = torch.zeros(sample.shape[:2] + (0, )).cuda()
+        scalar_input = torch.zeros(sample.shape[:2] + (0, )).cuda()
         for name in sorted(TRACKED_FEATURES):
             if "screen" in name or "minimap" in name:
                 continue
             elif "control_group" in name:
                 x, control_groups = self.input_columns[name](
-                    inputs[name], torch.zeros(inputs[name].shape))
+                    inputs[name], torch.zeros(inputs[name].shape).cuda())
                 scalar_input = torch.cat((scalar_input, x), 2)
 
             elif ("available_actions" in name or "build_order" in name
@@ -683,26 +734,27 @@ class Model(nn.Module):
             else:
                 x = self.input_columns[name](inputs[name])
                 scalar_input = torch.cat((scalar_input, x), 2)
-        scalar_input = self.scalar_reshape(scalar_input)
+        scalar_input = self.scalar_reshape(scalar_input).cuda()
         screen_inp, screen_bypass = self.screen_in(
-            inputs["feature_screen_scalar"], inputs["feature_screen_categorical"], scalar_input)
+            inputs["feature_screen_scalar"], inputs["feature_screen_categorical"], scalar_input.cuda())
         hidden_1 = hidden[:2]
+        hidden_1 = [hidden.cuda() for hidden in hidden_1]
         hidden_2 = hidden[2:]
+        hidden_2 = [hidden.cuda() for hidden in hidden_2]
 
         minimap_inp, minimap_bypass = self.map_in(
-            inputs["feature_minimap_scalar"], inputs["feature_minimap_categorical"], scalar_input)
+            inputs["feature_minimap_scalar"], inputs["feature_minimap_categorical"], scalar_input.cuda())
 
         screen_out, map_out, lstm_input, next_hidden = self.core(
             screen_inp, minimap_inp, hidden_1)
 
         lstm_input = torch.cat([lstm_input, scalar_input], dim=2)
-        lstm_input = lstm_input.cpu()
-        hidden_2 = [item.cpu() for item in hidden_2]
-        print(lstm_input.shape)
+        lstm_input = lstm_input.cuda()
         lstm_output, next_hidden2 = self.lstm(lstm_input, hidden_2)
         lstm_output = torch.cat([lstm_output, lstm_input], dim=2)
 
-        screen = (screen_out, screen_bypass)
+        screen = (screen_out,
+                  screen_bypass)
         minimap = (map_out, minimap_bypass)
 
         output, lstm_out = self.chain(
@@ -713,16 +765,16 @@ class Model(nn.Module):
                 continue
             if "screen" in x:
                 output[x] = self.output_column[x](
-                    screen, lstm_output)
+                    screen, lstm_out)
             elif "minimap" in x:
                 output[x] = self.output_column[x](
-                    minimap, lstm_output)
+                    minimap, lstm_out)
             elif "control_group" in x:
                 output[self.control_group_id_name], output[
                     self.control_group_act_name] = self.output_column[x](
-                        lstm_output, control_groups)
+                        lstm_out, control_groups)
             else:
-                output[x] = self.output_column[x](lstm_output)
+                output[x] = self.output_column[x](lstm_out)
 
         keys = list(output.keys())
         if not self.training:
@@ -742,28 +794,31 @@ class Model(nn.Module):
     def chain(self, lstm_output, gating, targets):
         outputs = {}
         key = "function"
-        gating = gating.reshape(-1, 256)
         result = self.output_column[key](lstm_output, gating)
         lstm_output = self.lstm_reshape_gating(lstm_output, gating)
-
         if "value" in self.output_column:
             outputs["value"] = self.output_column["value"](lstm_output)
 
-        action = targets[key]
-        print(action)
+        if self.training:
+            action = targets[key]
+        else:
+            action = self.sample_action(result, key)
 
         lstm_output = lstm_output + self.embedding[key](action.long())
         outputs[key] = result
         outputs[key + "_sampled"] = action
 
-        for key in [str(actions.TYPES.queued)]:
-            # result = self.output_column["queued"](lstm_output)
+        for key in ["time_skip", str(actions.TYPES.queued)]:
+            result = self.output_column[key](lstm_output)
 
-            action = targets[key]
+            if self.training:
+                action = targets[key]
+            else:
+                action = self.sample_action(result, key)
 
             lstm_output = lstm_output + self.embedding[key](action.long())
 
-            # outputs[key] = result
+            outputs[key] = result
             outputs[key + "_sampled"] = action
 
         return outputs, lstm_output
@@ -810,17 +865,23 @@ class A3CAgent(base_agent.BaseAgent):
         self.net = net
         self.optimizer = optim.Adam(
             self.net.parameters(), lr=0.26, eps=1e-3)
+        self.epoch_loss = 0
+        self.running_loss = 0
+        self.scaler = GradScaler()
         self.exp_source = []
+        self.total_losses_dict = {}
+        self.total_scores_dict = {}
         self.last_action = [0, []]
+        self.last_hidden = []
         self.GAMMA = 0.99
         self.step_count = 0
-        self.replays = []
-        with open(r"/home/gilsson/replay_save/1", "rb") as file:
-            self.replays.append(loads(decompress(load(file))))
+        self.scaler = GradScaler()
+        self.replays = None
+        with open(r"/home/gilsson/replay_save/53347052804f4146a03376614e139ea5.SC2Replay/0", "rb") as file:
+            self.replays = loads(decompress(load(file)))
 
-        inputs, targets, masks, hidden = zip(*self.replays)
-        self.current_replay = (
-            inputs[:100], targets, masks[:100], hidden)
+        inputs, targets, masks = zip(self.replays)
+        self.current_replay = (inputs[:50], targets[:50], masks[:50])
 
     def setup(self, obs_spec, action_spec):
         super(A3CAgent, self).setup(obs_spec, action_spec)
@@ -844,37 +905,13 @@ class A3CAgent(base_agent.BaseAgent):
     def replay(self,):
         pass
 
-    def step(self, obs: TimeStep):
+    def step(self, obs: TimeStep, function):
         super(A3CAgent, self).step(obs)
+        return function
+        # weights = 0
+        # for param in self.net.parameters():
+        #     weights += (param * param).sum().item()
 
-        print('Abobaaaaaaaaaaaaaaaaaa')
-
-        def concat(x):
-            output = {}
-            for entry in x[0]:
-                output[entry] = torch.cat([p[entry] for p in x], axis=1)
-
-            return output
-
-        def concat_lstm_hidden(x):
-            result = tuple()
-            swapped = zip(*x)
-            for field in swapped:
-                print(field, type(field))
-                output = torch.cat(field, axis=1)
-                result = result + (output, )
-
-            return result
-
-        inputs = concat(self.current_replay[0])
-        hiddens = concat_lstm_hidden(self.current_replay[3])
-        targets = concat(self.current_replay[2])
-        masks = concat(self.current_replay[1])
-
-        out = self.net(inputs, hiddens, targets)
-        step_type = obs.step_type
-        reward = obs.reward
-        obs_new = get_observation(obs.observation)
         # print(obs.observation['feature_screen'][-1].shape)
         # print('last action: ', obs.observation['last_actions'])
         # if len(obs.observation['last_actions']) == 0 and len(self.last_action) != 0:
@@ -943,13 +980,13 @@ class A3CAgent(base_agent.BaseAgent):
         #     else:
         #         return actions.FunctionCall(0, [])
         # else:
-        action = np.random.choice(obs.observation.available_actions)
-        # print('action choose', action)
-        args = [[np.random.randint(0, size) for size in arg.sizes]
-                for arg in self.action_spec.functions[action].args]
-        # print('args for action', args)
-        # if self.last_action.__len__() < 100:
-        self.last_action.append([action, args])
-        # print(self.last_action[-1])
-        return actions.FunctionCall(action, args)
+        # action = np.random.choice(obs.observation.available_actions)
+        # # print('action choose', action)
+        # args = [[np.random.randint(0, size) for size in arg.sizes]
+        #         for arg in self.action_spec.functions[action].args]
+        # # print('args for action', args)
+        # # if self.last_action.__len__() < 100:
+        # self.last_action.append([action, args])
+        # # print(self.last_action[-1])
+        # return actions.FunctionCall(action, args)
         return actions.FunctionCall(0, [])

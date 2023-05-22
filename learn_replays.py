@@ -8,7 +8,5 @@ if __name__ == "__main__":
     with open(r"/home/gilsson/replay_save/1", "rb") as file:
         batch.append(loads(decompress(load(file))))
 
-    # print(replay)
-
     inputs, targets, masks, hidden = zip(*batch)
     print(inputs, targets, masks, hidden)

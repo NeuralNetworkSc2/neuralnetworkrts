@@ -14,14 +14,33 @@ from pickle import dump
 import torch
 from zstd import compress
 from os import path
-from main import AGENT_INTERFACE_FORMAT
 from absl import flags
 import numpy as np
 from pysc2.lib import actions as ac
+import pysc2.lib.features as ft
 
+SAVE = "/home/gilsson/replay_save/"
 screen_size = (64, 64)
 minimap_size = (64, 64)
 NUM_WORKERS = 2
+
+AGENT_INTERFACE_FORMAT = ft.AgentInterfaceFormat(
+    feature_dimensions=ft.Dimensions((64, 64),
+                                     (64, 64)),
+    hide_specific_actions=True,
+    use_feature_units=True,
+    # use_raw_units=True,
+    # use_raw_actions=True,
+    max_raw_actions=512,
+    max_selected_units=30,
+    use_unit_counts=False,
+    use_camera_position=True,
+    show_cloaked=False,
+    show_burrowed_shadows=False,
+    show_placeholders=False,
+    # hide_specific_actions=False,
+    action_delay_fn=None,
+)
 
 
 def generate_zeroed_dicts():
@@ -84,7 +103,6 @@ def to_tensor(x, type=torch.float32):
 def concat_along_axis(x, axis):
     result = []
     swapped = zip(*x)
-    print(x)
     for field in swapped:
         output = {}
         for entry in field[0]:
@@ -96,14 +114,13 @@ def concat_along_axis(x, axis):
 
 
 class Replay():
-    def __init__(self, replay_path, replay_name, count):
+    def __init__(self, save_path):
         self.last_action = 0
-        self.steps = count
+        self.steps = 0
         self.result = 0
         self.build = []
         self.last_obs = None
-        self.replay_path = replay_path
-        self.replay_name = os.path.join(replay_path, replay_name)
+        self.save_path = save_path
         self.replay_data = []
         self.discount = 1
         self.actions_list = []
@@ -112,20 +129,16 @@ class Replay():
         self.units = []
         self.available_actions = []
         self.scores = []
-        print(self.replay_path, self.replay_name)
 
     def save_info(self):
-        inputs, target, masks = concat_along_axis(self.replay_data, 0)
+        inputs, target, masks = concat_along_axis(self.replay_data[:32], 0)
+        self.replay_data = self.replay_data[32:]
         inputs = to_tensor(inputs)
         target = to_tensor(target, torch.int64)
         masks = to_tensor(masks)
-        hidden = (torch.zeros(1, 8 * 8 * 2,
-                              128), torch.zeros(1, 8 * 8 * 2, 128),
-                  torch.zeros(2, 1, 1024),
-                  torch.zeros(2, 1, 1024))
-        hidden = tuple([hid.cuda() for hid in hidden])
-        with open("/home/gilsson/replay_save/" + str(self.steps), "wb") as f:
-            dump(compress(pickle.dumps((inputs, target, masks, hidden))), f)
+        with open(os.path.join(self.save_path, str(self.steps)), "wb") as f:
+            dump(compress(pickle.dumps((inputs, target, masks))), f)
+        self.steps += 1
 
     @ staticmethod
     def get_dict():
@@ -173,55 +186,43 @@ class Replay():
             self.last_obs = obs
             return
 
-        if self.last_obs is not None:
-            replay_action = None
-            if len(action) > 0:
-                act = action[0]
-                try:
-                    replay_action = feature.reverse_action(act)
-                except Exception:
-                    replay_action = None
+        replay_action = None
+        if len(action) > 0:
+            act = action[0]
+            try:
+                replay_action = feature.reverse_action(act)
+            except Exception:
+                replay_action = None
 
-            if replay_action:
-                print(replay_action)
-                rd, md = extract_action(replay_action)
-                new_obs = obs
-                func_name = replay_action.function.name
+        if replay_action:
+            rd, md = extract_action(replay_action)
+            new_obs = obs
 
-                if ("Train" in func_name
-                        or "Build" in func_name) and len(self.build) < 20:
-                    unit_type = None
-                    for race in (units.Neutral, units.Protoss, units.Terran, units.Zerg):
-                        try:
-                            unit_type = race[func_name.split("_")[1]]
-                        except KeyError:
-                            pass
-                    self.build.append(unit_type)
+            self.replay_data.append((get_observation(
+                feature.transform_obs(self.last_obs)), rd, md))
+            self.last_obs = new_obs
 
-                if replay_action == 1:
-                    if self.last_action == 1:
-                        del self.replay_data[-1]
-
-                self.replay_data.append((get_observation(
-                    feature.transform_obs(self.last_obs)), rd, md))
-                self.last_obs = new_obs
-                self.last_action = replay_action.function
+            while len(self.replay_data) > 32:
+                self.save_info()
 
         else:
             self.last_obs = obs
 
 
-def run_replay(names, state: Replay):
+def run_replay(names):
     set_num_threads(1)
     for i, name in enumerate(names):
-        path = os.path.join(target_dir, os.path.basename(name))
 
-        run_config: RunConfig = run_configs.get(version="latest")
+        os.makedirs(os.path.join(
+            SAVE, os.path.basename(name)), exist_ok=True)
+        state = Replay(os.path.join(SAVE, os.path.basename(name)))
+        path = os.path.join(target_dir, os.path.basename(name))
+        run_config: RunConfig = run_configs.get(version="4.10.0")
         sc2_proc = run_config.start()
         controller = sc2_proc.controller
         replay_data = run_config.replay_data(name)
-
         ping = controller.ping()
+
         try:
             info = controller.replay_info(replay_data)
         except Exception:
@@ -245,17 +246,14 @@ def run_replay(names, state: Replay):
 
         feature = features.features_from_game_info(controller.game_info())
 
-        # print(feature)
-
         episode_count = info.game_duration_loops
-        for a in range(0, episode_count):
+        for a in range(1, episode_count):
             controller.step(1)
             obs = controller.observe()
             state.step(obs, obs.actions, feature)
             if obs.player_result:
                 break
 
-        state.save_info()
         sc2_proc.close()
         continue
 
@@ -268,12 +266,13 @@ if __name__ == "__main__":
     directory = '/home/gilsson/Replay2/'
     target_dir = '/home/gilsson/StarTrain/model/'
     for path in os.listdir(directory):
-        names.append(os.path.join(directory, path))
+        if path not in os.listdir(SAVE):
+            names.append(os.path.join(directory, path))
 
-    NUM_WORKERS = 2
+    NUM_WORKERS = 4
     split = np.array_split(names, NUM_WORKERS)
-    print(split)
     for i, group in enumerate(split):
-        state = Replay(directory, os.path.basename(group[0]), i)
-        worker = Process(target=run_replay, args=(group, state))
+        # for replay in group:
+        replay_path = os.path.join(SAVE, os.path.basename(group[0]))
+        worker = Process(target=run_replay, args=(group, ))
         worker.start()

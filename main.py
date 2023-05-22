@@ -1,21 +1,20 @@
-import ptan
-import random
-import numpy as np
-from pysc2.env import sc2_env
-from pysc2 import run_configs
+from read_replays import get_observation
 import pysc2.lib.actions as ac
 import pysc2.lib.features as ft
 import sys
+from torch.cuda.amp.autocast_mode import autocast
+from torch.cuda.amp.grad_scaler import GradScaler
 from absl import flags
 from pysc2.env.environment import StepType, TimeStep
-from pysc2.lib.features import Dimensions
 import rl_agent
-import ptan
 from pysc2.lib import actions
 from pysc2.env import run_loop
+from rl_agent import compute_sl_loss, optim
 import torch
-import loader
-import util
+import os
+from pickle import loads, load
+from zstd import decompress
+from pysc2.env import sc2_env
 FLAGS = flags.FLAGS
 
 AGENT_INTERFACE_FORMAT = ft.AgentInterfaceFormat(
@@ -111,42 +110,142 @@ if __name__ == "__main__":
     # )
     # run_config = run_configs.get()
     # # with run_config.start() as controller:
-    # with sc2_env.SC2Env(
-    #         map_name="Acropolis",
-    #         players=[sc2_env.Agent(sc2_env.Race.zerg), sc2_env.Bot(
-    #             sc2_env.Race.terran, sc2_env.Difficulty.easy)],
-    #         realtime=False,
-    #         agent_interface_format=AGENT_INTERFACE_FORMAT) as env:
-    # net = rl_agent.Model(env.observation_spec()[
-    #     0]['feature_screen'], 573)
-    net = rl_agent.Model()
-    # print(env.observation_spec()[0]['feature_screen'])
+    # while True:
+    with sc2_env.SC2Env(
+            map_name="Acropolis",
+            players=[sc2_env.Agent(sc2_env.Race.protoss), sc2_env.Bot(
+                sc2_env.Race.terran, sc2_env.Difficulty.easy)],
+            realtime=True,
+            agent_interface_format=AGENT_INTERFACE_FORMAT) as env:
+        # net = rl_agent.Model(env.observation_spec()[
+        #     0]['feature_screen'], 573)
 
-    # agent = ptan.agent.PolicyAgent(lambda x: net(
-    #     x)[0], apply_softmax=True, device=torch.device("cuda"))
-    # exp_source = ptan.experience.ExperienceSourceFirstLast(env, agetn)
-    agent = rl_agent.A3CAgent(net)
-    # run_loop.run_loop([agent], env, 100000)
-    done = False
-    # action = [actions.FunctionCall(actions.FUNCTIONS.no_op.id, [])]
-    # obs = env.step(action)
-    while not done:
-        agent.step(TimeStep(StepType.FIRST, 1.0, 0.0, ()))
-    #     print("observation::::::::::::::::::::::::::::::")
-    #     print(obs[0].observation.feature_screen.player_relative)
-    #     # print("observation_spec>>")
-    #     # print(env.observation_spec())
-    #     # print('---------------------------------------------')
-    #     # print("action_spec>>")
-    #     # print(env.action_spec())
-    #     # print(random.choice(env.action_spec()[0][0]))
-    #     action = np.random.choice(obs[0].observation.available_actions)
-    #     args = [[np.random.randint(0, size) for size in arg.sizes]
-    #             for arg in env.action_spec()[0][1][action].args]
-    #     # print("args>>")
-    #     obs = env.step(
-    #         actions=[actions.FunctionCall(action, args)])
-    #     # if timesteps[0].last():
-    #     #     done = True
-    #     print('---------------------------------------------')
-    #     # nn = rl_agent.ActorCriticModel([64, 64], len(env.action_spec()))
+        training = False
+        net = rl_agent.Model(training).cuda()
+        # print(env.observation_spec()[0]['feature_screen'])
+
+        # agent = ptan.agent.PolicyAgent(lambda x: net(
+        #     x)[0], apply_softmax=True, device=torch.device("cuda"))
+        # exp_source = ptan.experience.ExperienceSourceFirstLast(env, agetn)
+        agent = rl_agent.A3CAgent(net)
+        optimizer = torch.optim.Adam(net.parameters(), lr=0.0005, eps=1e-4)
+        scaler = GradScaler()
+        # run_loop.run_loop([agent], env, 100000)
+        # action = [actions.FunctionCall(actions.FUNCTIONS.no_op.id, [])]
+        # obs = env.step(action)
+        state_dict_path = "/home/gilsson/PythonProjects/neural-network-rts/sl_model.tm"
+        checkpoint = torch.load(state_dict_path)
+
+        # net.load_state_dict(checkpoint["model_state_dict"])
+        # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        last_hidden = []
+        PATH = "/home/gilsson/replay_save/"
+        for file in os.listdir(PATH):
+            print(file)
+            replay_path = os.path.join(PATH, file)
+            replays = []
+            count = 0
+
+            for batch in sorted(os.listdir(replay_path)):
+                with open(os.path.join(replay_path, batch), "rb") as steps:
+                    replays.append(loads(decompress(load(steps))))
+
+            while True:
+                count += 1
+                if len(last_hidden) == 0:
+                    hiddens = (torch.zeros(1, 8 * 8 * 2,
+                                           128), torch.zeros(1,  8 * 8 * 2, 128),
+                               torch.zeros(1, 1, 128),
+                               torch.zeros(1, 1, 128))
+                else:
+                    hiddens = last_hidden
+                if training:
+
+                    current_replay = replays[count]
+                    inputs, targets, masks = zip(current_replay)
+                    current_replay = (inputs[:50], targets[:50], masks[:50])
+
+                    def concat(x):
+                        output = {}
+                        for entry in x[0]:
+                            output[entry] = torch.cat(
+                                [p[entry].cuda() for p in x], axis=1)
+
+                        return output
+
+                    def concat_lstm_hidden(x):
+                        result = tuple()
+                        swapped = zip(*x)
+                        for field in swapped:
+                            output = torch.cat(field, axis=1)
+                            result = result + (output, )
+
+                        return result
+                    inputs = concat(current_replay[0])
+                    targets = concat(current_replay[2])
+                    masks = concat(current_replay[1])
+
+                    for input in inputs:
+                        inputs[input] = inputs[input].cuda()
+
+                    for input in targets:
+                        targets[input] = targets[input].cuda()
+
+                    for input in masks:
+                        masks[input] = masks[input].cuda()
+
+                    with autocast():
+                        out, new_hid = net(inputs, hiddens, targets)
+                        loss, losses_dict, scores_dict = compute_sl_loss(
+                            out, targets, masks)
+
+                    reduced_loss = loss / 1 / 32
+                    # if count % 4 == 0:
+                    scaler.scale(reduced_loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
+                    last_hidden = [hidden.detach().cuda()
+                                   for hidden in new_hid]
+
+                    torch.save({
+                        'model_state_dict': net.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict()
+                    },  state_dict_path)
+                    print('SAVED')
+
+                else:
+                    obs = env.step([actions.FunctionCall(0, [])])
+                    time_step = obs[0]
+                    inputs = get_observation(time_step.observation)
+                    for input in inputs:
+                        inputs[input] = torch.FloatTensor(inputs[input]).cuda()
+
+                    out, new_hid = net(inputs, hiddens)
+                    last_hidden = [hidden.detach().cuda()
+                                   for hidden in new_hid]
+                    action = out["function_sampled"].squeeze().item()
+                    skip_target = max(
+                        out["time_skip_sampled"].squeeze().item() - 1,
+                        0) + time_step.observation["game_loop"][0]
+
+                    func = ac.FUNCTIONS[action]
+                    action_data = []
+                    last_action = {}
+                    for x in out:
+                        last_action[x.replace("_sampled",
+                                              "")] = out[x].detach().cpu()
+
+                    for x in ac.FUNCTION_TYPES[func.function_type]:
+                        sub_action = out[str(x) + "_sampled"].squeeze().item()
+
+                        if "screen" in str(x) or "minimap" in str(x):
+                            sub_action = (sub_action // 64, sub_action % 64)
+                        else:
+                            sub_action = (sub_action, )
+                        action_data.append(sub_action)
+
+                    func = ac.FunctionCall(action, action_data)
+                    print(time_step.observation['available_actions'])
+                    print(func)
+                    agent.step(time_step, func)
